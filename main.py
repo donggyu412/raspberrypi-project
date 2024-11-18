@@ -1,50 +1,64 @@
-import board    
-import time                                # 라즈베리파이의 핀을 다룰수 있게 해줌
-from digitalio import DigitalInOut, Direction   # 버튼과 불을 켜는 것을 다루기 위해 필요
-from PIL import Image, ImageDraw                # 그림을 그리고 글씨를 쓸수있게 해줌
-from adafruit_rgb_display import st7789         # 화면에 그림을 그릴수 있게 해줌
-from game_map import Map
+import time
+from setting import setup_display, create_image
+from Character import Character
+from Joystick import Joystick
+import importlib
+import game_map
 
 class Game:
     def __init__(self):
-        cs_pin = DigitalInOut(board.CE0)
-        dc_pin = DigitalInOut(board.D25)
-        reset_pin = DigitalInOut(board.D24)
-        BAUDRATE = 24000000
+        # 디스플레이 설정
+        self.disp = setup_display()
+        self.joystick = Joystick()  
 
-        spi = board.SPI()
-        self.disp = st7789.ST7789(
-            spi,
-            width=240,
-            height=240,
-            y_offset=80,
-            rotation=180,
-            cs=cs_pin,      
-            dc=dc_pin,
-            rst=reset_pin,
-            baudrate=BAUDRATE,
-        )
-
-        # 필수 백라이트 켜기 LCD 디스플레이는 스스로 빛을 내지 않기 때문에 
-        backlight = DigitalInOut(board.D26)
-        backlight.switch_to_output()
-        backlight.value = True
-
-        # Create blank image for drawing.
-        # Make sure to create image with mode 'RGB' for color.
+        # 이미지와 그리기 도구 생성
         self.width = self.disp.width
         self.height = self.disp.height
-        self.image = Image.new("RGB", (self.width, self.height), color=(0, 0, 0))  # 검정 배경
-        self.draw = ImageDraw.Draw(self.image)  # 그리기 도구
+        self.image, self.draw = create_image(self.width, self.height)
 
-        self.map = Map(self)  # 맵 객체 생성
+        # 캐릭터 생성
+        self.character = Character(self.width, self.height)
+
+        # 맵 객체 생성
+        self.map = game_map.Map(self)
+
+    def update(self):
+        direction = self.joystick.get_direction()
+        if direction == "UP":
+            self.character.move(0, -5)
+        elif direction == "DOWN":
+            self.character.move(0, 5)
+        elif direction == "LEFT":
+            self.character.move(-5, 0)
+        elif direction == "RIGHT":
+            self.character.move(5, 0)
+
+    def draw_frame(self):
+        # 이전 프레임 지우기
+        self.image, self.draw = create_image(self.width, self.height)
+
+        # 맵과 캐릭터 그리기
+        self.map.draw()
+        self.character.draw(self.draw)
+
+        # 화면 업데이트
+        self.disp.image(self.image)
 
     def run(self):
-        while True:
-            self.map.draw()  # 맵 그리기
-            self.disp.image(self.image)  # 디스플레이에 이미지 출력
-            time.sleep(0.1)
+        try:
+            while True:
+                # 상태 업데이트
+                self.update()
 
+                # 화면 그리기
+                self.draw_frame()
+
+                # 일정 시간 대기
+                time.sleep(0.1)
+
+        except KeyboardInterrupt:
+            print("프로그램 종료.")
+            return
 
 if __name__ == '__main__':
     game = Game()
